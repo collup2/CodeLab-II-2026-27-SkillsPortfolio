@@ -266,7 +266,60 @@ class MathsQuiz:
       self.feedback_label.pack(pady=8)
 
    def setProgress(self, fraction):
-      self.progress.coords(self.progress_fill, 0, 0, PROGRESS_W * fraction, 8)
+      self.progress_target = PROGRESS_W * fraction
+      if not self.progress_running:
+         self.progress_running = True
+         self.stepProgress()
+
+   def stepProgress(self):
+      if not self.progress.winfo_exists():
+         self.progress_running = False
+         return
+      difference = self.progress_target - self.progress_current
+      if abs(difference) < 1:
+         self.progress_current = self.progress_target
+         self.progress_running = False
+      else:
+         self.progress_current += difference * 0.3
+         self.root.after(16, self.stepProgress)
+      self.progress.coords(self.progress_fill, 0, 0, self.progress_current, 8)
+
+   def setEntryColour(self, colour):
+      self.answer_entry.config(bg=colour, disabledbackground=colour)
+
+   def flashEntry(self, colour):
+      self.setEntryColour(colour)
+      self.root.after(350, self.resetEntryColour)
+
+   def resetEntryColour(self):
+      if self.answer_entry.winfo_exists():
+         self.setEntryColour(ENTRY_BG)
+
+   def shakeEntry(self, step=0): # Move the answer row left and right to show a wrong answer
+      offsets = [-10, 10, -8, 8, -5, 5, -2, 2, 0]
+      if not self.entry_frame.winfo_exists():
+         return
+      offset = offsets[step]
+      self.entry_frame.pack_configure(padx=(20 + offset, 20 - offset))
+      if step + 1 < len(offsets):
+         self.root.after(30, lambda: self.shakeEntry(step + 1))
+
+   def floatPoints(self, points): # Show the points earned floating upwards while fading out
+      label = tk.Label(
+         self.container, text=f"+{points}", bg=BG, fg=GREEN, font=(FONT, 22, "bold")
+      )
+      total_steps = 14
+      def animate(step=0):
+         if not label.winfo_exists():
+            return
+         t = step / total_steps
+         label.place(relx=0.86, y=170 - 50 * t, anchor="center")
+         label.config(fg=blend(GREEN, BG, t))
+         if step < total_steps:
+            self.root.after(30, lambda: animate(step + 1))
+         else:
+            label.destroy()
+      animate()
 
    def nextQuestion(self): # Create a new problem, or show the results after the last question
       self.question_number += 1
@@ -297,7 +350,8 @@ class MathsQuiz:
       self.score_label.config(text=f"Score: {self.score}")
       self.problem_label.config(text=f"{self.num1} {self.operator} {self.num2} = ?")
       self.feedback_label.config(text="")
-      self.answer_entry.config(state="normal", bg=ENTRY_BG, disabledbackground=ENTRY_BG)
+      self.answer_entry.config(state="normal")
+      self.resetEntryColour()
       self.answer_entry.delete(0, tk.END)
       self.answer_entry.focus_set()
       self.submit_button.setEnabled(True)
@@ -314,17 +368,24 @@ class MathsQuiz:
          user_answer = int(text)
       except ValueError:
          self.feedback_label.config(text="Please enter a whole number.", fg=AMBER)
+         self.shakeEntry()
          return
       if self.isCorrect(user_answer): # Correct answer: 10 points on the first try, 5 on the second
          points = POINTS_FIRST_ATTEMPT if self.attempt == 1 else POINTS_SECOND_ATTEMPT
          self.score += points
          self.score_label.config(text=f"Score: {self.score}")
+         self.flashEntry("#2f5d45")
+         self.floatPoints(points)
          self.finishQuestion(f"✓ Correct! +{points} points.", GREEN)
       elif self.attempt == 1: # First wrong answer: allow a second attempt
          self.attempt = 2
          self.answer_entry.delete(0, tk.END)
          self.feedback_label.config(text="✗ Not quite. Try once more!", fg=RED)
+         self.flashEntry("#6b2f3d")
+         self.shakeEntry()
       else: # Second wrong answer: show the correct answer and move on
+         self.flashEntry("#6b2f3d")
+         self.shakeEntry()
          self.finishQuestion(
             f"✗ Wrong. The correct answer was {self.correct_answer}.", RED
          )
