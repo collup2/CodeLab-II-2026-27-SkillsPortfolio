@@ -324,13 +324,7 @@ class MathsQuiz:
    def nextQuestion(self): # Create a new problem, or show the results after the last question
       self.question_number += 1
       if self.question_number > TOTAL_QUESTIONS:
-         tk.Label(
-            self.container,
-            text=f"Finished! Score: {self.score}",
-            bg=BG,
-            fg=GREEN,
-            font=(FONT, 18, "bold"),
-         ).pack(pady=30)
+         self.displayResults()
          return
       self.attempt = 1
       self.locked = False
@@ -398,7 +392,90 @@ class MathsQuiz:
       self.setProgress(self.question_number / TOTAL_QUESTIONS)
       self.root.after(FEEDBACK_DELAY_MS, self.nextQuestion)
 
-if __name__ == "__main__":
+   def displayResults(self): # Show the final score out of 100, the grade and the play again buttons
+      self.clearScreen()
+      grade = gradeFor(self.score)
+      maximum = TOTAL_QUESTIONS * POINTS_FIRST_ATTEMPT
+      self.confetti = tk.Canvas(self.container, bg=BG, highlightthickness=0)
+      self.confetti.place(x=0, y=0, relwidth=1, relheight=1)
+      tk.Label(
+         self.container, text="Quiz Complete!", bg=BG, fg=TEXT, font=(FONT, 24, "bold")
+      ).pack(pady=(20, 4))
+      tk.Frame(self.container, bg=ACCENT, width=90, height=3).pack()
+      self.result_score = tk.Label(
+         self.container, text=f"0 / {maximum}", bg=BG, fg=TEXT, font=(FONT, 40, "bold")
+      )
+      self.result_score.pack(pady=(22, 4))
+      self.result_grade = tk.Label(
+         self.container, text="", bg=BG, fg=GRADE_COLOURS[grade], font=(FONT, 30, "bold")
+      )
+      self.result_grade.pack(pady=4)
+      tk.Label(
+         self.container,
+         text="Would you like to play again?",
+         bg=BG,
+         fg=MUTED,
+         font=(FONT, 12),
+      ).pack(pady=(24, 10))
+      button_frame = tk.Frame(self.container, bg=BG)
+      button_frame.pack()
+      FlatButton(
+         button_frame,
+         text="Yes",
+         command=self.displayMenu,
+         bg=ACCENT,
+         hover=ACCENT_HOVER,
+         width=10,
+      ).pack(side="left", padx=8)
+      FlatButton(
+         button_frame,
+         text="No",
+         command=self.root.destroy,
+         bg=ENTRY_BORDER,
+         hover="#585878",
+         fg=TEXT,
+         width=10,
+      ).pack(side="left", padx=8)
+      self.countUp(0, grade, maximum)
+
+   def countUp(self, shown, grade, maximum): # Animate the score counting up from 0
+      if not self.result_score.winfo_exists():
+         return
+      shown = min(self.score, shown + max(1, self.score // 30))
+      self.result_score.config(text=f"{shown} / {maximum}")
+      if shown < self.score:
+         self.root.after(25, lambda: self.countUp(shown, grade, maximum))
+      else:
+         self.result_grade.config(text=f"Grade: {grade}")
+         if grade == "A+":
+            self.launchConfetti()
+
+   def launchConfetti(self): # Create falling confetti pieces and animate them
+      width = WINDOW_W - 40
+      pieces = []
+      for _ in range(60):
+         x = random.randint(0, width)
+         y = random.randint(-200, -10)
+         size = random.randint(5, 9)
+         item = self.confetti.create_rectangle(
+            x, y, x + size, y + size, fill=random.choice(CONFETTI_COLOURS), width=0
+         )
+         pieces.append((item, random.uniform(3, 7), random.uniform(-1.5, 1.5)))
+      def fall(frame=0):
+         if not self.confetti.winfo_exists():
+            return
+         for item, speed, drift in pieces:
+            self.confetti.move(item, drift, speed)
+         if frame < 70:
+            self.root.after(30, lambda: fall(frame + 1))
+         else:
+            self.confetti.delete("all")
+      fall()
+
+def main(): # Create the window and start the app
    root = tk.Tk()
    MathsQuiz(root)
    root.mainloop()
+
+if __name__ == "__main__": # Run the quiz only when this file is executed directly
+   main()
